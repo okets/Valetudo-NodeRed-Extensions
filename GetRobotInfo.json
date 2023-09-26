@@ -27,35 +27,6 @@
         "l": true
     },
     {
-        "id": "ee265e4c9e91efd7",
-        "type": "inject",
-        "z": "cc2fa3fa50284df3",
-        "name": "",
-        "props": [
-            {
-                "p": "payload"
-            },
-            {
-                "p": "topic",
-                "vt": "str"
-            }
-        ],
-        "repeat": "",
-        "crontab": "",
-        "once": false,
-        "onceDelay": 0.1,
-        "topic": "",
-        "payload": "",
-        "payloadType": "date",
-        "x": 180,
-        "y": 360,
-        "wires": [
-            [
-                "a4b963e2cc742f41"
-            ]
-        ]
-    },
-    {
         "id": "097d32da1bcf1071",
         "type": "json",
         "z": "cc2fa3fa50284df3",
@@ -79,7 +50,7 @@
         "method": "GET",
         "ret": "txt",
         "paytoqs": "ignore",
-        "url": "http://10.10.10.7/api/v2/robot/state",
+        "url": "http://ROBOT_IP/api/v2/robot/state",
         "tls": "",
         "persist": false,
         "proxy": "",
@@ -87,10 +58,6 @@
         "authType": "",
         "senderr": false,
         "headers": [],
-        "credentials": {
-            "user": "",
-            "password": ""
-        },
         "x": 600,
         "y": 400,
         "wires": [
@@ -106,6 +73,7 @@
         "name": "Locate Robot Segment & extract States",
         "func": "const mapData = msg.payload.map;\nconst _pixelSize = mapData.pixelSize;\nlet _robotXY = null;\nfor (let i = 0; i < mapData.entities.length; i++) {\n    if (mapData.entities[i].type == \"robot_position\") {\n        _robotXY = {\n            x: Math.floor(mapData.entities[i].points[0] / _pixelSize),\n            y: Math.floor(mapData.entities[i].points[1] / _pixelSize)\n        };\n        break;\n    }\n}\n\n// Test Data\n// _robotXY = {\n//     x: 1000,\n//     y: 1000\n// };\n\nconst _nearestPoint = {\n    x: mapData.size.x,\n    y: mapData.size.y,\n    distance: Math.pow(mapData.size.x,2) + Math.pow(mapData.size.y,2), //Just a placeholder with the biggest distance possible\n    foundRoom:{\n        segmentId: null,\n        name: null\n    }\n}\n\nif (mapData.metaData?.version === 2 && Array.isArray(mapData.layers)) {\n    mapData.layers.forEach(layer => {\n        if (layer.pixels.length === 0 && layer.compressedPixels.length !== 0 && layer.type == \"segment\") {\n            for (let i = 0; i < layer.compressedPixels.length; i = i + 3) {\n                const xStart = layer.compressedPixels[i];\n                const y = layer.compressedPixels[i + 1]\n                const count = layer.compressedPixels[i + 2]\n                for (let j = 0; j < count; j++) {\n                    let x = xStart + j;\n\n                    let _distanceX = x - _robotXY.x;\n                    let _distanceY = y - _robotXY.y;\n                    //const _pointToRobotDistance = Math.sqrt(Math.pow(_distanceX, 2) + Math.pow(_distanceY, 2));\n                    const _pointToRobotDistance = Math.pow(_distanceX, 2) + Math.pow(_distanceY, 2);//sqrt is the \"correct\" trig function, but I only need to compare relative to other points, not exact distance, so I dropped the \"sqrt\" function for efficiancy\n                    if (_nearestPoint.distance > _pointToRobotDistance){\n                        _nearestPoint.distance = _pointToRobotDistance;\n                        _nearestPoint.x = x;\n                        _nearestPoint.y = y;\n                        _nearestPoint.foundRoom= {\n                            segmentId: layer.metaData.segmentId,\n                            name: layer.metaData.name\n                        };\n                    }\n                    if (_nearestPoint.distance==0) {\n                        return;\n                    }\n                }\n            }\n        }\n    })\n}\nconst _robotInfo={};\nmsg.payload.attributes.forEach(attribute => {\n    switch(attribute.__class){\n        case \"StatusStateAttribute\":\n            _robotInfo.state = attribute.value;\n            break;\n        case \"BatteryStateAttribute\":\n            _robotInfo.battery_level = attribute.level;\n            break;\n        case \"ConsumableStateAttribute\":\n            switch (attribute.type){\n                case \"brush\":\n                    if (attribute.subType==\"main\"){\n                        _robotInfo.main_brush_remaining = attribute.remaining;\n                    } else if (attribute.subType == \"side_right\") {\n                        _robotInfo.side_right_brush_remaining = attribute.remaining;\n                    }\n                    break;\n                case \"filter\":\n                    _robotInfo.main_filter_remaining = attribute.remaining;\n                    break;\n                case \"sensor\":\n                    _robotInfo.sensor_cleanup_remaining = attribute.remaining;\n                    break;\n            }\n            break;\n    }\n});\n\n_robotInfo.currentLocation = _nearestPoint.foundRoom;\n_robotInfo._linkSource = msg._linkSource;\nmsg.robot_info = _robotInfo;\nmsg.payload = msg.originalPayload;\nmsg.originalPayload=null;\nreturn msg;",
         "outputs": 1,
+        "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
@@ -125,6 +93,7 @@
         "name": "save calling flow payload",
         "func": "msg.originalPayload = msg.payload;\nmsg.payload=null;\nreturn msg;",
         "outputs": 1,
+        "timeout": "",
         "noerr": 0,
         "initialize": "",
         "finalize": "",
